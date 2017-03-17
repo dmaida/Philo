@@ -1,67 +1,118 @@
-/*
-Daniel Maida
-CS 360
-Assignment 6
-*/
+// Daniel Maida
+// CS 360
 
 #define _POSIX_SOURCE
-#include <errno.h>
+#define _XOPEN_SOURCE
+#include <math.h>
 #include <stdio.h>
-#include <unistd.h>
+#include <stdlib.h>
 #include <string.h>
-#include <sys/types.h>
-#include <dirent.h>
-#include <fcntl.h>
-#include <sys/stat.h>
+#include <unistd.h>
+#include <errno.h>
+#include <sys/wait.h>
 #include <signal.h>
 #include <stdbool.h>
-#include <ctype.h>
-#include <sys/wait.h>
-#include <stdlib.h>
-#include <math.h>
-#define PHILOSOPHERS_NUMB 5
+#include <semaphore.h>
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/sem.h>
+#include <sys/stat.h>
 
-/* successive calls to randomGaussian produce integer return values */
-/* having a gaussian distribution with the given mean and standard  */
-/* deviation.  Return values may be negative.                       */
+#include "random.h"
 
-void doChildStuff() {
-	printf("%s\n", "Doing child stuff");
-}
+#define NUM_PHILO 5
+int chopsticks;
 
 
-void philo() {
-	int pids[PHILOSOPHERS_NUMB];
+void EatOrThink(int i, pid_t pid){
 
-	for(int i = 0; i < PHILOSOPHERS_NUMB; i++) {
-    pids[i] = fork();
-    if(pids[i] < 0) {
-        printf("Error");
-        exit(1);
-    } else if (pids[i] == 0) {
-        printf("Child (%d): %d\n", i , getpid());
-				//call something here
-        exit(0);
+    //printf("Philosopher %i starting (process %d)\n", i, pid);
+
+    int time_eating = 0;
+    int time_thinking = 0;
+
+    while(time_eating < 25){
+
+        int time_to_think = randomGaussian(5, 3); // 11 , 7
+        if (time_to_think < 0){
+            time_to_think = 0;
+        }
+        printf("Philosopher %i thinking for %i seconds (total %i)\n",
+            i,time_to_think, time_thinking);
+        sleep(time_to_think);
+        time_thinking += time_to_think;
+
+        int left = i;
+        int right = (i + 1) % NUM_PHILO;
+
+        printf("Philosopher %i checking for chopsticks %i and %i\n",
+            i,left,right );
+
+        struct sembuf take[2];
+        take[0].sem_num = left;
+        take[0].sem_op = -1;
+        take[0].sem_flg = 0;
+        take[1].sem_num = right;
+        take[1].sem_op = -1;
+        take[1].sem_flg = 0;
+
+        struct sembuf drop[2];
+        drop[0].sem_num = left;
+        drop[0].sem_op = 1;
+        drop[0].sem_flg = 0;
+        drop[1].sem_num = right;
+        drop[1].sem_op = 1;
+        drop[1].sem_flg = 0;        
+
+        int time_to_eat = 0;
+
+        if (semop(chopsticks, take, 2) == 0) {
+
+        	time_to_eat = randomGaussian(9, 3); // 9 , 3
+            if (time_to_eat < 0){
+                time_to_eat = 0;
+            }
+            printf("Philosopher %i eating for %i seconds (total %i)\n", 
+                i, time_to_eat, time_eating);
+            sleep(time_to_eat);
+            time_eating += time_to_eat;
+            semop(chopsticks, drop, 2);
+        }
     }
-	}
-	
-	for (int i = 0; i < PHILOSOPHERS_NUMB; i++) {
-		wait(NULL);
-	}
+    printf("Philosopher %i ate for a total of %i seconds and thought for %i seconds\n", i, time_eating, time_thinking);
+
 }
 
-int randomGaussian(int mean, int stddev) {
-	double mu = 0.5 + (double) mean;
-	double sigma = fabs((double) stddev);
-	double f1 = sqrt(-2.0 * log((double) rand() / (double) RAND_MAX));
-	double f2 = 2.0 * 3.14159265359 * (double) rand() / (double) RAND_MAX;
-	if (rand() & (1 << 5))
-	return (int) floor(mu + sigma * cos(f2) * f1);
-	else
-	return (int) floor(mu + sigma * sin(f2) * f1);
+void philo(){
+
+    pid_t pid[NUM_PHILO];
+   
+    chopsticks = semget(IPC_PRIVATE, NUM_PHILO, IPC_CREAT | 0666);  //IPC used by process related to a fork, IPC_PRIVATE, IPC_CREAT | 0666 -permissions for server/any rw access
+    for(int i=0; i< NUM_PHILO; i++){
+        semctl(chopsticks, i, SETVAL, 1);  //Go through and set the valud of the chopstick to 1
+    }
+
+    for (int i = 0; i < NUM_PHILO; ++i){
+        pid_t childID = fork();
+        //printf("Forked Philosopher %i (process %d)\n", i, childID);
+        pid[i] = childID;
+        if (pid[i] < 0){
+            printf("Error\n");
+            exit(1);
+        }else if (pid[i] == 0){
+            //printf("Child (%d): %d\n", i, getpid());
+            EatOrThink(i, childID);
+            printf("Philosopher %i is leaving the table\n", i);
+            exit(1);
+        }        
+    }
+    for (int i = 0; i < NUM_PHILO; ++i){
+        wait(NULL);
+    }
 }
+
 
 int main(int argc, char* argv[]){
-	philo();
-	return 0;
+    philo();
+    return 0;
 }
