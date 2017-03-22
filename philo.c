@@ -27,14 +27,14 @@ int randomGaussian(int mean, int stddev) {
     double sigma = fabs((double) stddev);
     double f1 = sqrt(-2.0 * log((double) rand() / (double) RAND_MAX));
     double f2 = 2.0 * 3.14159265359 * (double) rand() / (double) RAND_MAX;
-    if (rand() & (1 << 5)) 
+    if (rand() & (1 << 5))
         return (int) floor(mu + sigma * cos(f2) * f1);
-    else            
+    else
         return (int) floor(mu + sigma * sin(f2) * f1);
 }
 
 void EatOrThink(int i){
-    srand(i);
+    srand(i); // seed the amount time each Philosopher eats and thinks
     int time_eating = 0;
     int time_thinking = 0;
 
@@ -68,12 +68,12 @@ void EatOrThink(int i){
         drop[0].sem_flg = 0;
         drop[1].sem_num = right;
         drop[1].sem_op = 1;
-        drop[1].sem_flg = 0;        
+        drop[1].sem_flg = 0;
 
         int time_to_eat = 0;
         int errCheck = 0;
 
-        if ((errCheck = semop(chopsticks, take, 2)) == 0) { 
+        if ((errCheck = semop(chopsticks, take, 2)) == 0) {
         	time_to_eat = randomGaussian(9, 3);
             if (time_to_eat < 0){
                 time_to_eat = 0;
@@ -82,7 +82,7 @@ void EatOrThink(int i){
             sleep(time_to_eat);
             time_eating += time_to_eat;
             semop(chopsticks, drop, 2);
-        } 
+        }
         if (errCheck == -1) {
             fprintf(stderr, "%s\n", "Semop returned an error");
         }
@@ -93,11 +93,11 @@ void EatOrThink(int i){
 void philo(){
 
     pid_t pid[NUM_PHILO];
-   
+
     chopsticks = semget(IPC_PRIVATE, NUM_PHILO, IPC_CREAT | 0666);
-    
-    for(int i=0; i< NUM_PHILO; i++){ // set the values of the semaphore
-        semctl(chopsticks, i, SETVAL, 1);  
+
+    for(int i=0; i< NUM_PHILO; i++){ // set the values of the semaphore set
+        semctl(chopsticks, i, SETVAL, 1);
     }
 
     for (int i = 0; i < NUM_PHILO; ++i){
@@ -110,7 +110,7 @@ void philo(){
             EatOrThink(i);
             printf("Philosopher %i is leaving the table\n", i);
             exit(1);
-        }        
+        }
     }
     for (int i = 0; i < NUM_PHILO; ++i){
         wait(NULL);
